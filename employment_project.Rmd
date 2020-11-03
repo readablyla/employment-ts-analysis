@@ -12,6 +12,7 @@ First load all required packages:
 ```{r message=FALSE, warning=FALSE}
 library(car)
 library(tseries)
+library(astsa)
 ```
 
 Load in the data:
@@ -41,8 +42,13 @@ plot.ts(diff(ts_dat))
 ```
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
+Check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test, which has the following hypotheses [...]:
+```{r}
+kpss.test(ts_dat)
+```
+The small p-value indicates that we should reject the null and conclude that the ts is not stationary.
 
-As a rough test (Levene's isn't really valid because time series data isn't independent)
+As a rough test of constant variance (Levene's isn't really valid because time series data isn't independent)
 ```{r}
 length(ts_dat)
 Group <- c(rep(1,81), rep(2, 81), rep(3, 81), rep(4, 81))
@@ -57,27 +63,28 @@ leveneTest(log_ts_dat, Group)
 
 At a significance level of 5%, the p-value above of 0.2245 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
 
-Next, to reduce the trend in mean, apply diff to incorporate lags of 1 to our TS with stabilised variance:
+Next, to reduce the trend in mean, apply differencing of 1 lag to our TS with stabilised variance:
 ```{r}
 f_ts_dat <- diff(log_ts_dat, 1)
 plot.ts(cbind(ts_dat, log_ts_dat, f_ts_dat))
 ```
-To confirm constant mean and variance and a Gaussian distribution for $u_t$, a Shapiro-Wilk normality test is performed:
+To confirm constant mean and variance and a Gaussian distribution for the time series, a Shapiro-Wilk normality test is performed:
 ```{r}
 hist(f_ts_dat)
 shapiro.test(f_ts_dat)
 ```
 The small p-value indicates likely non-normality, but this test isn't really valid for TS. Instead, check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test:
 ```{r}
-kpss.test(ts_dat)
 kpss.test(log_ts_dat)
 kpss.test(f_ts_dat)
 ```
 The final ts has a high p-value of 0.1, which is statistically significant at a significance level of 5%. Therefore we fail to reject the null hypothesis, and have reasonable evidence that the final ts is stationary.
 
-
-
-
+Next, the ACF and PACF of the differenced ts are plotted in order to estimate p and q. 
+```{r}
+acf2(f_ts_dat)
+```
+Seasonal patterns are clear, more strongly in the ACF plot. 
 
 
 
