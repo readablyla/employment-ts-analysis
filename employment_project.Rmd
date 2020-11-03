@@ -84,7 +84,73 @@ Next, the ACF and PACF of the differenced ts are plotted in order to estimate p 
 ```{r}
 acf2(f_ts_dat)
 ```
-Seasonal patterns are clear, more strongly in the ACF plot. 
+Seasonal patterns are clear, more strongly in the ACF plot.  
+Will fit a SARIMA(p,d,q)(P,D,Q)_s model.
+
+The data being monthly and the ACF plot having its highest peaks at lags $h=12, 24, 36, 48$ implies a seasonal trend of 12 would be a good choice. 
+Slow decay over these four peaks suggests there is a difference between seasons. To remove this trend, difference the ts on the seasonal lag:
+```{r}
+ts_dat_12 <- diff(f_ts_dat, 12)
+kpss.test(ts_dat_12) #Big enough to call stationary
+acf2(ts_dat_12)
+```
+
+First examine these plots at seasonal lags h = 1S(=12), 2S,...
+Strong peak at 1S in both the ACF and PACF. Might indicate:
+1) ACF and PACF both tail off at seasonal lags after spikes at 1S in both, suggesting $P=1$ and $Q=1$
+2) ACF cuts off after lag 1S and PACF tails off at seasonal lags, suggesting $P=0$ and $Q=1$
+3) ACF tails off at seasonal lags and PACF cuts off after lag 1s, suggesting $P=1$ and $Q=0$
+So $0\leq P \leq 1$ and $0\leq Q \leq 1$.
+
+Now examine at $h=1,2,...,11$ to estimate p and q. This is kind of hard? They don't really seem to tail/cut off in either plot. Try:
+1) ACF and PACF both tail off, suggesting $p=q=1$
+2) ACF cuts off and PACF tails off: $p=0$ and $q=1$
+3) ACF tails off and PACF cuts off: $p=1$ and $q=0$
+
+```{r}
+sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.161924
+# ttable says ma1 coeff has highest p-value. removing this:
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.168226
+# ttable says sar1 coeff has highest p-value. removing this:
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.170977
+```
+Is the standardised residuals plot problematic? The normal Q-Q plot has 2 outliers. The ljung-Box statistic is passable at lag 20. 
+
+What if the patterns are quarterly, not yearly? 
+```{r}
+ts_dat_4 <- diff(f_ts_dat, 4)
+kpss.test(ts_dat_4) # Again, big enough to call stationary
+acf2(ts_dat_4)
+```
+
+Struggling with the logic here, but the models are marginally better according to AICc
+
+```{r}
+sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 3, D = 1, Q = 3, S = 4) #AICc: -8.299593
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 2, D = 1, Q = 3, S = 4) #AICc: -8.305847
+```
+What if the patterns are bi-monthly?
+```{r}
+ts_dat_2 <- diff(f_ts_dat, 2)
+kpss.test(ts_dat_2) # Again, big enough to call stationary
+acf2(ts_dat_2)
+```
+Again, this logic is a bit tricky
+Seasonal:
+ACF tails off, PACF cuts off -> P=5
+Lags h = 1
+One or both tail off, p=q=1?
+
+```{r}
+sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 5, D = 1, Q = 0, S = 2) #AICc -8.122763, ttable says to remove ma1
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 5, D = 1, Q = 0, S = 2) #AICc -8.129134
+```
+The residuals look better here, but Ljung-Box is worse
+
+
+
+
+
 
 
 
