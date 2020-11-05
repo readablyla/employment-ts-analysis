@@ -21,12 +21,13 @@ dat <- read.csv("employment_data.csv", fileEncoding = 'UTF-8-BOM')
 head(dat)
 ```
 
-Create a time series object from the data and plot
+Create a time series object from the data and plot. The blue lines are visually detected structural breakpoints - contextual reasoning is PC surge in the 90s and COVID-19. The red line indicates the training/test split. 
 ```{r}
 ts_dat_test <- ts(dat[, 2], start = c(1978, 2), end = c(2020, 8), frequency = 12)
 plot.ts(ts_dat_test)
 abline(v = 1993, col = "blue")
 abline(v = 2020, col = "blue")
+abline(v = 2019, col = "red", lty = 2)
 ```
 Instructed to truncate data from January 1993 to December 2019 (inclusive)
 ```{r}
@@ -38,7 +39,8 @@ So we only need rows 180-503.
 trunc_dat <- dat[180:503,]
 ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12)
 plot.ts(ts_dat)
-plot.ts(diff(ts_dat))
+plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
+# This 2nd plot is just to help look for trends in variance. 
 ```
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
@@ -106,46 +108,19 @@ Now examine at $h=1,2,...,11$ to estimate p and q. This is kind of hard? They do
 1) ACF and PACF both tail off, suggesting $p=q=1$
 2) ACF cuts off and PACF tails off: $p=0$ and $q=1$
 3) ACF tails off and PACF cuts off: $p=1$ and $q=0$
-
+Again $0\leq p \leq 1$ and $0\leq q \leq 1$
 ```{r}
 sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.161924
-# ttable says ma1 coeff has highest p-value. removing this:
+# ttable says ma1 coeff has highest p-value. removing this (model trimming):
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.168226
 # ttable says sar1 coeff has highest p-value. removing this:
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.170977
 ```
-Is the standardised residuals plot problematic? The normal Q-Q plot has 2 outliers. The ljung-Box statistic is passable at lag 20. 
+We see a couple of outliers - pinpoint what these points are. The ljung-Box statistic is passable at lag 20 or 30.  
 
-What if the patterns are quarterly, not yearly? 
-```{r}
-ts_dat_4 <- diff(f_ts_dat, 4)
-kpss.test(ts_dat_4) # Again, big enough to call stationary
-acf2(ts_dat_4)
-```
+Now fit the model, make predictions, assess their accuracy and report the final model.  
 
-Struggling with the logic here, but the models are marginally better according to AICc
-
-```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 3, D = 1, Q = 3, S = 4) #AICc: -8.299593
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 2, D = 1, Q = 3, S = 4) #AICc: -8.305847
-```
-What if the patterns are bi-monthly?
-```{r}
-ts_dat_2 <- diff(f_ts_dat, 2)
-kpss.test(ts_dat_2) # Again, big enough to call stationary
-acf2(ts_dat_2)
-```
-Again, this logic is a bit tricky
-Seasonal:
-ACF tails off, PACF cuts off -> P=5
-Lags h = 1
-One or both tail off, p=q=1?
-
-```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 5, D = 1, Q = 0, S = 2) #AICc -8.122763, ttable says to remove ma1
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 5, D = 1, Q = 0, S = 2) #AICc -8.129134
-```
-The residuals look better here, but Ljung-Box is worse
+Future work.
 
 
 
