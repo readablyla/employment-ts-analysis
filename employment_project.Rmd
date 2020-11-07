@@ -1,7 +1,7 @@
 ---
 title: "Employment Analysis"
-author: "Leala Darby"
-date: "03/11/2020"
+author: "Leala Darby, Scott Howard, Georgia Fardell"
+date: "07/11/2020"
 output: pdf_document
 ---
 
@@ -21,12 +21,13 @@ dat <- read.csv("employment_data.csv", fileEncoding = 'UTF-8-BOM')
 head(dat)
 ```
 
-Create a time series object from the data and plot
+Create a time series object from the data and plot. The blue lines are visually detected structural breakpoints - contextual reasoning is PC surge in the 90s and COVID-19. The red line indicates the training/test split. 
 ```{r}
 ts_dat_test <- ts(dat[, 2], start = c(1978, 2), end = c(2020, 8), frequency = 12)
-plot.ts(ts_dat_test)
+plot.ts(ts_dat_test, ylab="Employed (Persons)")
 abline(v = 1993, col = "blue")
 abline(v = 2020, col = "blue")
+abline(v = 2019, col = "red", lty = 2)
 ```
 Instructed to truncate data from January 1993 to December 2019 (inclusive)
 ```{r}
@@ -35,10 +36,13 @@ dat[dat$Observation.times == "Dec-19",]
 ```
 So we only need rows 180-503.
 ```{r}
-trunc_dat <- dat[180:503,]
-ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12)
+trunc_dat <- dat[180:492,]
+trunc_dat1 <- dat[180:503,]
+ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) #data for the modelling
+ts_tot <- ts(trunc_dat1[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12) #total data for comparison
 plot.ts(ts_dat)
-plot.ts(diff(ts_dat))
+plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
+# This 2nd plot is just to help look for trends in variance. 
 ```
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
@@ -51,17 +55,17 @@ The small p-value indicates that we should reject the null and conclude that the
 As a rough test of constant variance (Levene's isn't really valid because time series data isn't independent)
 ```{r}
 length(ts_dat)
-Group <- c(rep(1,81), rep(2, 81), rep(3, 81), rep(4, 81))
+Group <- c(rep(1,78), rep(2, 78), rep(3, 78), rep(4, 78))
 leveneTest(ts_dat, Group)
 ```
-The small p-value of $0.0001013$ confirms that the data exhibits heteroscedasticity. Therefore we will perform a log transformation to attempt to reduce this:
+The small p-value of $0.04837$ confirms that the data exhibits heteroscedasticity. Therefore we will perform a log transformation to attempt to reduce this:
 ```{r}
 log_ts_dat <- log(ts_dat)
 plot.ts(cbind(ts_dat, log_ts_dat))
 leveneTest(log_ts_dat, Group)
 ```
 
-At a significance level of 5%, the p-value above of 0.2245 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
+At a significance level of 5%, the p-value above of 0.7209 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
 
 Next, to reduce the trend in mean, apply differencing of 1 lag to our TS with stabilised variance:
 ```{r}
@@ -80,90 +84,67 @@ kpss.test(f_ts_dat)
 ```
 The final ts has a high p-value of 0.1, which is statistically significant at a significance level of 5%. Therefore we fail to reject the null hypothesis, and have reasonable evidence that the final ts is stationary.
 
-Next, the ACF and PACF of the differenced ts are plotted in order to estimate p and q. 
+Next, the ACF and PACF of the differenced ts are plotted for analysis. 
 ```{r}
 acf2(f_ts_dat)
 ```
-Seasonal patterns are clear, more strongly in the ACF plot.  
-Will fit a SARIMA(p,d,q)(P,D,Q)_s model.
-
-The data being monthly and the ACF plot having its highest peaks at lags $h=12, 24, 36, 48$ implies a seasonal trend of 12 would be a good choice. 
-Slow decay over these four peaks suggests there is a difference between seasons. To remove this trend, difference the ts on the seasonal lag:
+Seasonal patterns in the ACF for TS_name (Figure [above]) show a slow decay in the dominant lags. To mitigate this, the time series was differenced in 12 lags giving [differenced model] for which the ACF and PACF are plotted in Figure [below].  
 ```{r}
 ts_dat_12 <- diff(f_ts_dat, 12)
 kpss.test(ts_dat_12) #Big enough to call stationary
 acf2(ts_dat_12)
 ```
 
-First examine these plots at seasonal lags h = 1S(=12), 2S,...
-Strong peak at 1S in both the ACF and PACF. Might indicate:
-1) ACF and PACF both tail off at seasonal lags after spikes at 1S in both, suggesting $P=1$ and $Q=1$
-2) ACF cuts off after lag 1S and PACF tails off at seasonal lags, suggesting $P=0$ and $Q=1$
-3) ACF tails off at seasonal lags and PACF cuts off after lag 1s, suggesting $P=1$ and $Q=0$
-So $0\leq P \leq 1$ and $0\leq Q \leq 1$.
-
-Now examine at $h=1,2,...,11$ to estimate p and q. This is kind of hard? They don't really seem to tail/cut off in either plot. Try:
-1) ACF and PACF both tail off, suggesting $p=q=1$
-2) ACF cuts off and PACF tails off: $p=0$ and $q=1$
-3) ACF tails off and PACF cuts off: $p=1$ and $q=0$
+At the seasonal level, these indicate a cutoff at 1 in the ACF and tailing off in PACF, possibly indicating P=0 and Q=1. Lags 1,2,…,11 suggest several choices, so estimates of 0 ≤ p ≤ 1 and 0 ≤ q ≤ 1 are made and explored.  
 
 ```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.161924
-# ttable says ma1 coeff has highest p-value. removing this:
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.168226
+sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.123946
+# ttable says ma1 coeff has highest p-value. removing this (model trimming):
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.13055
 # ttable says sar1 coeff has highest p-value. removing this:
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.170977
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.133259
 ```
-Is the standardised residuals plot problematic? The normal Q-Q plot has 2 outliers. The ljung-Box statistic is passable at lag 20. 
+By trimming coefficients and finding the minimum bias-corrected AIC, the model selected was $SARIMA(1,1,0)(0,1,1)_{12}$.
 
-What if the patterns are quarterly, not yearly? 
+We see a couple of outliers - pinpoint what these points are. The Ljung-Box statistic is passable at lag 20 or 30.  
+
+
+
+Fit the model from above with lowest AIC
 ```{r}
-ts_dat_4 <- diff(f_ts_dat, 4)
-kpss.test(ts_dat_4) # Again, big enough to call stationary
-acf2(ts_dat_4)
+#fit1 <- sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
+#sarima.for(log_ts_dat,12, 1,1,0, 0,1,1,12) from text book sarima.for
+fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(1,1,1), period = 12))
+fore <- predict(fit, n.ahead = 12)
+ts.plot(cbind(log_ts_dat, fore$pred),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2020), ylab = "log_ts_dat", ylim = c(8.9, 9.5))
+#lines(fore$pred, type="p", col=2)
+lines(fore$pred + 2*fore$se, lty = "dashed", col = 4) #95% confidence boundaries 
+lines(fore$pred - 2*fore$se, lty = "dashed", col = 4)
 ```
 
-Struggling with the logic here, but the models are marginally better according to AICc
-
+Try to put it over the whole data. need to undo the log
 ```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 3, D = 1, Q = 3, S = 4) #AICc: -8.299593
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 2, D = 1, Q = 3, S = 4) #AICc: -8.305847
+ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
+lines(fore$pred, type = "p", col = 2)
+#lines(exp(fore$pred) + 2*exp(fore$se), lty = "dashed", col = 4) #95% confidence boundaries 
+lines(exp(fore$pred+2*fore$se), lty="dashed", col=4)
+#lines(exp(fore$pred) - 2*exp(fore$se), lty = "dashed", col = 4)
+lines(exp(fore$pred-2*fore$se), lty="dashed", col=4)
+#just order (of operations maybe) changed as per Prof's example
 ```
-What if the patterns are bi-monthly?
+
+
+
+Try to graph just result section
 ```{r}
-ts_dat_2 <- diff(f_ts_dat, 2)
-kpss.test(ts_dat_2) # Again, big enough to call stationary
-acf2(ts_dat_2)
+ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(2018.5, 2020), ylab = "Employed (Persons)", ylim = c(12500, 13500) )
+lines(fore$pred, type = "p", col = 2)
+#95% confidence boundaries 
+lines(exp(fore$pred+2*fore$se), lty="dashed", col=4)
+lines(exp(fore$pred-2*fore$se), lty="dashed", col=4)
 ```
-Again, this logic is a bit tricky
-Seasonal:
-ACF tails off, PACF cuts off -> P=5
-Lags h = 1
-One or both tail off, p=q=1?
-
-```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 5, D = 1, Q = 0, S = 2) #AICc -8.122763, ttable says to remove ma1
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 5, D = 1, Q = 0, S = 2) #AICc -8.129134
-```
-The residuals look better here, but Ljung-Box is worse
 
 
+Assess the predictions.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Discuss future work.
