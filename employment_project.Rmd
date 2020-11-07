@@ -17,7 +17,7 @@ library(astsa)
 
 Load in the data:
 ```{r}
-dat <- read.csv("testdata1.csv", fileEncoding = 'UTF-8-BOM')
+dat <- read.csv("employment_data.csv", fileEncoding = 'UTF-8-BOM')
 head(dat)
 ```
 
