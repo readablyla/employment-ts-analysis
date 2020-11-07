@@ -1,7 +1,7 @@
 ---
 title: "Employment Analysis"
-author: "Leala Darby"
-date: "03/11/2020"
+author: "Leala Darby, Scott Howard, Georgia Fardell"
+date: "07/11/2020"
 output: pdf_document
 ---
 
@@ -84,33 +84,19 @@ kpss.test(f_ts_dat)
 ```
 The final ts has a high p-value of 0.1, which is statistically significant at a significance level of 5%. Therefore we fail to reject the null hypothesis, and have reasonable evidence that the final ts is stationary.
 
-Next, the ACF and PACF of the differenced ts are plotted in order to estimate p and q. 
+Next, the ACF and PACF of the differenced ts are plotted for analysis. 
 ```{r}
 acf2(f_ts_dat)
 ```
-Seasonal patterns are clear, more strongly in the ACF plot.  
-Will fit a SARIMA(p,d,q)(P,D,Q)_s model.
-
-The data being monthly and the ACF plot having its highest peaks at lags $h=12, 24, 36, 48$ implies a seasonal trend of 12 would be a good choice. 
-Slow decay over these four peaks suggests there is a difference between seasons. To remove this trend, difference the ts on the seasonal lag:
+Seasonal patterns in the ACF for TS_name (Figure [above]) show a slow decay in the dominant lags. To mitigate this, the time series was differenced in 12 lags giving [differenced model] for which the ACF and PACF are plotted in Figure [below].  
 ```{r}
 ts_dat_12 <- diff(f_ts_dat, 12)
 kpss.test(ts_dat_12) #Big enough to call stationary
 acf2(ts_dat_12)
 ```
 
-First examine these plots at seasonal lags h = 1S(=12), 2S,...
-Strong peak at 1S in both the ACF and PACF. Might indicate:
-1) ACF and PACF both tail off at seasonal lags after spikes at 1S in both, suggesting $P=1$ and $Q=1$
-2) ACF cuts off after lag 1S and PACF tails off at seasonal lags, suggesting $P=0$ and $Q=1$
-3) ACF tails off at seasonal lags and PACF cuts off after lag 1s, suggesting $P=1$ and $Q=0$
-So $0\leq P \leq 1$ and $0\leq Q \leq 1$.
+At the seasonal level, these indicate a cutoff at 1 in the ACF and tailing off in PACF, possibly indicating P=0 and Q=1. Lags 1,2,…,11 suggest several choices, so estimates of 0 ≤ p ≤ 1 and 0 ≤ q ≤ 1 are made and explored.  
 
-Now examine at $h=1,2,...,11$ to estimate p and q. This is kind of hard? They don't really seem to tail/cut off in either plot. Try:
-1) ACF and PACF both tail off, suggesting $p=q=1$
-2) ACF cuts off and PACF tails off: $p=0$ and $q=1$
-3) ACF tails off and PACF cuts off: $p=1$ and $q=0$
-Again $0\leq p \leq 1$ and $0\leq q \leq 1$
 ```{r}
 sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.123946
 # ttable says ma1 coeff has highest p-value. removing this (model trimming):
@@ -118,15 +104,14 @@ sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.13
 # ttable says sar1 coeff has highest p-value. removing this:
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.133259
 ```
-We see a couple of outliers - pinpoint what these points are. The ljung-Box statistic is passable at lag 20 or 30.  
+By trimming coefficients and finding the minimum bias-corrected AIC, the model selected was $SARIMA(1,1,0)(0,1,1)_{12}$.
 
-Now fit the model, make predictions, assess their accuracy and report the final model.  
+We see a couple of outliers - pinpoint what these points are. The Ljung-Box statistic is passable at lag 20 or 30.  
 
-Future work.
 
-fit the modelfrom above with lowest AIC
+
+Fit the model from above with lowest AIC
 ```{r}
-
 #fit1 <- sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
 #sarima.for(log_ts_dat,12, 1,1,0, 0,1,1,12) from text book sarima.for
 fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(1,1,1), period = 12))
@@ -137,13 +122,14 @@ lines(fore$pred + 2*fore$se, lty = "dashed", col = 4) #95% confidence boundaries
 lines(fore$pred - 2*fore$se, lty = "dashed", col = 4)
 ```
 
-try to put it over the whole data. need to undo the log
+Try to put it over the whole data. need to undo the log
 ```{r}
-
 ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
 #lines(fore$pred, type = "p", col = 2)
 #lines(exp(fore$pred) + 2*exp(fore$se), lty = "dashed", col = 4) #95% confidence boundaries 
 #lines(exp(fore$pred) - 2*exp(fore$se), lty = "dashed", col = 4)
-
 ```
 
+Assess the predictions.
+
+Discuss future work.
