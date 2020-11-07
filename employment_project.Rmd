@@ -36,8 +36,10 @@ dat[dat$Observation.times == "Dec-19",]
 ```
 So we only need rows 180-503.
 ```{r}
-trunc_dat <- dat[180:503,]
-ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12)
+trunc_dat <- dat[180:492,]
+trunc_dat1 <- dat[180:503,]
+ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) #data for the modelling
+ts_tot <- ts(trunc_dat1[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12) #total data for comparison
 plot.ts(ts_dat)
 plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
 # This 2nd plot is just to help look for trends in variance. 
@@ -53,17 +55,17 @@ The small p-value indicates that we should reject the null and conclude that the
 As a rough test of constant variance (Levene's isn't really valid because time series data isn't independent)
 ```{r}
 length(ts_dat)
-Group <- c(rep(1,81), rep(2, 81), rep(3, 81), rep(4, 81))
+Group <- c(rep(1,78), rep(2, 78), rep(3, 78), rep(4, 78))
 leveneTest(ts_dat, Group)
 ```
-The small p-value of $0.0001013$ confirms that the data exhibits heteroscedasticity. Therefore we will perform a log transformation to attempt to reduce this:
+The small p-value of $0.04837$ confirms that the data exhibits heteroscedasticity. Therefore we will perform a log transformation to attempt to reduce this:
 ```{r}
 log_ts_dat <- log(ts_dat)
 plot.ts(cbind(ts_dat, log_ts_dat))
 leveneTest(log_ts_dat, Group)
 ```
 
-At a significance level of 5%, the p-value above of 0.2245 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
+At a significance level of 5%, the p-value above of 0.7209 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
 
 Next, to reduce the trend in mean, apply differencing of 1 lag to our TS with stabilised variance:
 ```{r}
@@ -110,11 +112,11 @@ Now examine at $h=1,2,...,11$ to estimate p and q. This is kind of hard? They do
 3) ACF tails off and PACF cuts off: $p=1$ and $q=0$
 Again $0\leq p \leq 1$ and $0\leq q \leq 1$
 ```{r}
-sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.161924
+sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.123946
 # ttable says ma1 coeff has highest p-value. removing this (model trimming):
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.168226
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.13055
 # ttable says sar1 coeff has highest p-value. removing this:
-sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.170977
+sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.133259
 ```
 We see a couple of outliers - pinpoint what these points are. The ljung-Box statistic is passable at lag 20 or 30.  
 
@@ -122,23 +124,26 @@ Now fit the model, make predictions, assess their accuracy and report the final 
 
 Future work.
 
+fit the modelfrom above with lowest AIC
+```{r}
 
+#fit1 <- sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
+#sarima.for(log_ts_dat,12, 1,1,0, 0,1,1,12) from text book sarima.for
+fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(1,1,1), period = 12))
+fore <- predict(fit, n.ahead = 12)
+ts.plot(cbind(log_ts_dat, fore$pred),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2020), ylab = "log_ts_dat", ylim = c(8.9, 9.5))
+#lines(fore$pred, type="p", col=2)
+lines(fore$pred + 2*fore$se, lty = "dashed", col = 4) #95% confidence boundaries 
+lines(fore$pred - 2*fore$se, lty = "dashed", col = 4)
+```
 
+try to put it over the whole data. need to undo the log
+```{r}
 
+ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
+#lines(fore$pred, type = "p", col = 2)
+#lines(exp(fore$pred) + 2*exp(fore$se), lty = "dashed", col = 4) #95% confidence boundaries 
+#lines(exp(fore$pred) - 2*exp(fore$se), lty = "dashed", col = 4)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```
 
