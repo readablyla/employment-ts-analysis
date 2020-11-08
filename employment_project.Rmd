@@ -1,7 +1,7 @@
 ---
 title: "Employment Analysis"
 author: "Leala Darby, Scott Howard, Georgia Fardell"
-date: "07/11/2020"
+date: "08/11/2020"
 output: pdf_document
 ---
 
@@ -29,31 +29,35 @@ abline(v = 1993, col = "blue")
 abline(v = 2020, col = "blue")
 abline(v = 2019, col = "red", lty = 2)
 ```
+We should use this plot in the intro section for our intitial time series.  
+
 Instructed to truncate data from January 1993 to December 2019 (inclusive)
 ```{r}
 dat[dat$Observation.times == "Jan-93",]
 dat[dat$Observation.times == "Dec-19",]
+dat[dat$Observation.times == "Jan-19",]
 ```
-So we only need rows 180-503 for the total data set, for the predictions we need 493 to 503. we should use this plot in the intro section for our intitial time series. 
+So we only need rows 180-503 for the total data set.
+Splitting into training and test sets where the test set is all of 2019, we have train [180:491] and test [492:503].
+
 ```{r}
-trunc_dat <- dat[180:492,]
-trunc_dat1 <- dat[180:503,]
-trunc_dat2 <- dat[491:503,]
-ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) #data for the modelling
-ts_tot <- ts(trunc_dat1[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12) #total data for comparison
-exp_ts <- ts(trunc_dat2[, 2], start = c(2018, 12), end = c(2019, 12), frequency = 12)#for mape calcs
-plot.ts(ts_dat, ylab="People Employed (000's)") #updated units
-plot.ts(ts_tot, ylab="People Employed (000's)") #updated units
-plot.ts(exp_ts)
+trunc_dat <- dat[180:503,] # all data after truncating
+train_dat <- dat[180:491,] # training data
+test_dat <- dat[492:503,] # test data
+join_dat <- dat[491:492,] # the month between training data and predictions (for plotting)
+ts_dat <- ts(train_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) # ts for model fitting
+test_ts <- ts(test_dat[, 2], start = c(2019, 1), end = c(2019, 12), frequency = 12) # ts for model testing
+ts_join <- ts(join_dat[, 2], start = c(2018, 12), end = c(2019, 1), frequency = 12) # between train and test
+plot.ts(ts_dat, ylab="People Employed (000's)")
 plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
-# This 2nd plot is just to help look for trends in variance. 
+# This 2nd plot is just to help observe trends in variance. 
 ```
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
 Check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test, which has the following hypotheses:
 \begin{align*}
-H_o: \text{TS is stationary}\\
-H_a: \text{TS in not stationary}
+H_o&: \text{TS is stationary}\\
+H_a&: \text{TS in not stationary}
 \end{align*}
 ```{r}
 kpss.test(ts_dat)
@@ -103,7 +107,7 @@ kpss.test(ts_dat_12) #Big enough to call stationary
 acf2(ts_dat_12)
 ```
 
-At the seasonal level, these indicate a cutoff at 1 in the ACF and tailing off in PACF, possibly indicating P=0 and Q=1. Lags 1,2,…,11 suggest several choices, so estimates of 0 ≤ p ≤ 1 and 0 ≤ q ≤ 1 are made and explored.  
+At the seasonal level, these indicate a cutoff at 1 in the ACF and tailing off in PACF, possibly indicating P=0 and Q=1. Lags 1,2,…,11 suggest several choices, so estimates of $0 \leq p \leq 1$ and $0 \leq q \leq 1$ are made and explored.  
 
 ```{r}
 sarima(log_ts_dat, p = 1, d = 1, q = 1, P = 1, D = 1, Q = 1, S = 12) #AICc -8.123946
@@ -112,57 +116,42 @@ sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.13
 # ttable says sar1 coeff has highest p-value. removing this:
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.133259
 ```
-First model has the lowest AICc but the Ljung-Box statistic is not satisfactory at lag 20,  and unnesssecary coefficients were present in the model.
+For the first model, the Ljung-Box statistic is not satisfactory at lag 20, and unnesssecary coefficients were present in the model.
 By trimming coefficients and finding the minimum bias-corrected AIC, the model selected was $SARIMA(1,1,0)(0,1,1)_{12}$.
 
 We see a couple of outliers - pinpoint what these points are. The Ljung-Box statistic is passable at lag 20 or 30.  
 
 
-
 Fit the model from above with lowest AIC
 ```{r}
-#fit1 <- sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
-#sarima.for(log_ts_dat,12, 1,1,0, 0,1,1,12) from text book sarima.for
 fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(0,1,1), period = 12))
 fore <- predict(fit, n.ahead = 12)
-ts.plot(cbind(log_ts_dat, fore$pred),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2020), ylab = "log_ts_dat", ylim = c(8.9, 9.5))
-#lines(fore$pred, type="p", col=2)
-lines(fore$pred + 2*fore$se, lty = "dashed", col = 4) #95% confidence boundaries 
-lines(fore$pred - 2*fore$se, lty = "dashed", col = 4)
-```
-
-Try to put it over the whole data. need to undo the log
-```{r}
-ts.plot(cbind(ts_dat,ts_tot, exp(fore$pred)),lwd = 1, col = c(1,1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
-#lines(exp(fore$pred), type = "p", col = 2)
-lines(exp(fore$pred+2*fore$se), lty="dashed", col=4) #95% confidence boundaries
-lines(exp(fore$pred-2*fore$se), lty="dashed", col=4) #95% confidence boundaries
 ```
 
 
-
-Try to graph just result section
+Display predictions:
 ```{r}
-ts.plot(cbind(ts_dat,exp(fore$pred)), lwd = c(2,2), col = c(1,2), xlim = c(2018, 2020), ylab = "People Employed (000's)", ylim = c(12300, 13500) )
+ts.plot(cbind(ts_dat, exp(fore$pred)), lwd = c(2, 2), col = c(1, 2), xlim = c(2017, 2020), 
+        ylab = "People Employed (000's)", ylim = c(11900, 13500))
 lines(exp(fore$pred), type = "p", col = 2, lwd = 2)
-#95% confidence boundaries 
-lines(exp(fore$pred+2*fore$se), lty="dashed", col=4, lwd = 2)
-lines(exp(fore$pred-2*fore$se), lty="dashed", col=4, lwd = 2)
-lines(exp_ts, lty = "dashed", lwd = 2) 
+lines(ts_join, lty = "dashed", lwd = 2)
+lines(test_ts, lty = "dashed", lwd = 2) 
+# 95% confidence boundaries 
+lines(exp(fore$pred+2*fore$se), lty="dashed", col = 4, lwd = 2)
+lines(exp(fore$pred-2*fore$se), lty="dashed", col = 4, lwd = 2)
 ```
-Concerned about the dashed line starting in december 2018 and our predictions starting in january...
 
-Assess the predictions. MAPE etc exp_ts is defined with the other data set breaks
+
+Assess the predictions. MAPE etc.
+test_ts is defined with the other data set breaks
 ```{r}
 MAPE = 0
 for (i in 1:12){
-  MAPE = MAPE + abs((exp_ts[i] - exp(fore$pred[i]))/exp_ts[i]) 
+  MAPE = MAPE + abs((test_ts[i] - exp(fore$pred[i])) / test_ts[i]) 
 }
 MAPE = MAPE/12*100
 MAPE
 ```
-Mape seems pretty good, yes?
-
-Discuss future work.
+Discuss future work. Mention any TS that might be interesting, we could include a scatterplot if we have a candidate that shows good results?
 
 
