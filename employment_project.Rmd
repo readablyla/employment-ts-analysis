@@ -24,7 +24,7 @@ head(dat)
 Create a time series object from the data and plot. The blue lines are visually detected structural breakpoints - contextual reasoning is PC surge in the 90s and COVID-19. The red line indicates the training/test split. 
 ```{r}
 ts_dat_test <- ts(dat[, 2], start = c(1978, 2), end = c(2020, 8), frequency = 12)
-plot.ts(ts_dat_test, ylab="Employed (Persons)")
+plot.ts(ts_dat_test, ylab="People Employed (000's)") #updated units
 abline(v = 1993, col = "blue")
 abline(v = 2020, col = "blue")
 abline(v = 2019, col = "red", lty = 2)
@@ -34,19 +34,27 @@ Instructed to truncate data from January 1993 to December 2019 (inclusive)
 dat[dat$Observation.times == "Jan-93",]
 dat[dat$Observation.times == "Dec-19",]
 ```
-So we only need rows 180-503.
+So we only need rows 180-503 for the total data set, for the predictions we need 493 to 503. we should use this plot in the intro section for our intitial time series. 
 ```{r}
 trunc_dat <- dat[180:492,]
 trunc_dat1 <- dat[180:503,]
+trunc_dat2 <- dat[491:503,]
 ts_dat <- ts(trunc_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) #data for the modelling
 ts_tot <- ts(trunc_dat1[, 2], start = c(1993, 1), end = c(2019, 12), frequency = 12) #total data for comparison
-plot.ts(ts_dat)
+exp_ts <- ts(trunc_dat2[, 2], start = c(2018, 12), end = c(2019, 12), frequency = 12)#for mape calcs
+plot.ts(ts_dat, ylab="People Employed (000's)") #updated units
+plot.ts(ts_tot, ylab="People Employed (000's)") #updated units
+plot.ts(exp_ts)
 plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
 # This 2nd plot is just to help look for trends in variance. 
 ```
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
-Check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test, which has the following hypotheses [...]:
+Check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test, which has the following hypotheses:
+\begin{align*}
+H_o: \text{TS is stationary}\\
+H_a: \text{TS in not stationary}
+\end{align*}
 ```{r}
 kpss.test(ts_dat)
 ```
@@ -104,6 +112,7 @@ sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 1, D = 1, Q = 1, S = 12) #AICc -8.13
 # ttable says sar1 coeff has highest p-value. removing this:
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12) #AICc -8.133259
 ```
+First model has the lowest AICc but the Ljung-Box statistic is not satisfactory at lag 20,  and unnesssecary coefficients were present in the model.
 By trimming coefficients and finding the minimum bias-corrected AIC, the model selected was $SARIMA(1,1,0)(0,1,1)_{12}$.
 
 We see a couple of outliers - pinpoint what these points are. The Ljung-Box statistic is passable at lag 20 or 30.  
@@ -114,7 +123,7 @@ Fit the model from above with lowest AIC
 ```{r}
 #fit1 <- sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
 #sarima.for(log_ts_dat,12, 1,1,0, 0,1,1,12) from text book sarima.for
-fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(1,1,1), period = 12))
+fit <- arima(log_ts_dat, c(1,1,0), seasonal = list(order = c(0,1,1), period = 12))
 fore <- predict(fit, n.ahead = 12)
 ts.plot(cbind(log_ts_dat, fore$pred),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2020), ylab = "log_ts_dat", ylim = c(8.9, 9.5))
 #lines(fore$pred, type="p", col=2)
@@ -124,27 +133,36 @@ lines(fore$pred - 2*fore$se, lty = "dashed", col = 4)
 
 Try to put it over the whole data. need to undo the log
 ```{r}
-ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
-lines(fore$pred, type = "p", col = 2)
-#lines(exp(fore$pred) + 2*exp(fore$se), lty = "dashed", col = 4) #95% confidence boundaries 
-lines(exp(fore$pred+2*fore$se), lty="dashed", col=4)
-#lines(exp(fore$pred) - 2*exp(fore$se), lty = "dashed", col = 4)
-lines(exp(fore$pred-2*fore$se), lty="dashed", col=4)
-#just order (of operations maybe) changed as per Prof's example
+ts.plot(cbind(ts_dat,ts_tot, exp(fore$pred)),lwd = 1, col = c(1,1,2), xlim = c(1993, 2021), ylab = "original", ylim = c(7500, 13000) )
+#lines(exp(fore$pred), type = "p", col = 2)
+lines(exp(fore$pred+2*fore$se), lty="dashed", col=4) #95% confidence boundaries
+lines(exp(fore$pred-2*fore$se), lty="dashed", col=4) #95% confidence boundaries
 ```
 
 
 
 Try to graph just result section
 ```{r}
-ts.plot(cbind(ts_tot, exp(fore$pred)),lwd = c(1,1), col = c(1,2), xlim = c(2018.5, 2020), ylab = "Employed (Persons)", ylim = c(12500, 13500) )
-lines(fore$pred, type = "p", col = 2)
+ts.plot(cbind(ts_dat,exp(fore$pred)), lwd = c(2,2), col = c(1,2), xlim = c(2018, 2020), ylab = "People Employed (000's)", ylim = c(12300, 13500) )
+lines(exp(fore$pred), type = "p", col = 2, lwd = 2)
 #95% confidence boundaries 
-lines(exp(fore$pred+2*fore$se), lty="dashed", col=4)
-lines(exp(fore$pred-2*fore$se), lty="dashed", col=4)
+lines(exp(fore$pred+2*fore$se), lty="dashed", col=4, lwd = 2)
+lines(exp(fore$pred-2*fore$se), lty="dashed", col=4, lwd = 2)
+lines(exp_ts, lty = "dashed", lwd = 2) 
 ```
+Concerned about the dashed line starting in december 2018 and our predictions starting in january...
 
-
-Assess the predictions.
+Assess the predictions. MAPE etc exp_ts is defined with the other data set breaks
+```{r}
+MAPE = 0
+for (i in 1:12){
+  MAPE = MAPE + abs((exp_ts[i] - exp(fore$pred[i]))/exp_ts[i]) 
+}
+MAPE = MAPE/12*100
+MAPE
+```
+Mape seems pretty good, yes?
 
 Discuss future work.
+
+
