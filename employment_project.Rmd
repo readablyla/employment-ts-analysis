@@ -197,3 +197,39 @@ So we have a MAPE or 17.13% or an accuracy of prediction of 82.87% accuracy of f
 
 Discuss future work. Mention any TS that might be interesting, we could include a scatterplot if we have a candidate that shows good results?
 
+Load in the additional data:
+```{r}
+dat2 <- read.csv("hours_data.csv", fileEncoding = 'UTF-8-BOM')
+head(dat2)
+```
+
+Create a time series object from the data and plot.
+
+```{r}
+ts_hours <- ts(dat2[, 2], start = c(1991, 1), end = c(2020, 8), frequency = 12)
+plot.ts(ts_hours)
+
+
+```
+
+Cut the ts down to subset in appropriate time
+
+```{r}
+
+train_hours <- dat[25:336,] # for training data
+train_hours
+ts_h <- ts(train_hours[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) # ts compare to model
+plot.ts(ts_h)
+
+
+```
+
+
+Plot a scatter plot comparing employed data and hours for those months. 
+
+```{r}
+
+pairs(cbind(Workers=ts_dat, Hours=ts_h))
+# similar method to wk 6 lab
+
+```
