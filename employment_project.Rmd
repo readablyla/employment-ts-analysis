@@ -187,7 +187,13 @@ for (i in 1:12){
 }
 MAPE = MAPE/12*100
 MAPE
+Acc = 1-MAPE
+Acc
 ```
-Discuss future work. Mention any TS that might be interesting, we could include a scatterplot if we have a candidate that shows good results?
+MAPE can be converted to accuracy by 1-MAPE
+So we have a MAPE or 17.13% or an accuracy of prediction of 82.87% accuracy of forcecast over a 12 month period.
 
+
+
+Discuss future work. Mention any TS that might be interesting, we could include a scatterplot if we have a candidate that shows good results?
 
