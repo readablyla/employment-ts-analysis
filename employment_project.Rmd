@@ -8,7 +8,9 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-First load all required packages:
+## Organise analysis in preparation for constructing poster.  
+
+First load all required packages:  
 ```{r message=FALSE, warning=FALSE}
 library(car)
 library(tseries)
@@ -21,7 +23,7 @@ dat <- read.csv("employment_data.csv", fileEncoding = 'UTF-8-BOM')
 head(dat)
 ```
 
-Create a time series object from the data and plot. The blue lines are visually detected structural breakpoints - contextual reasoning is PC surge in the 90s and COVID-19. The red line indicates the training/test split. 
+Create a time series object from the data and plot. The blue lines are visually detected structural breakpoints - contextual reasoning is recession in the 90s and COVID-19 in 2020. The red line indicates the training/test split. 
 ```{r}
 ts_dat_test <- ts(dat[, 2], start = c(1978, 2), end = c(2020, 8), frequency = 12)
 #jpeg("plot_ts.jpg", width = 990, height = 400)
@@ -36,6 +38,7 @@ abline(v = 2019, col = "red", lty = 2, lwd = 2)
 #dev.off()
 ```
 
+\newpage
 Instructed to truncate data from January 1993 to December 2019 (inclusive)
 ```{r}
 dat[dat$Observation.times == "Jan-93",]
@@ -50,13 +53,18 @@ trunc_dat <- dat[180:503,] # all data after truncating
 train_dat <- dat[180:491,] # training data
 test_dat <- dat[492:503,] # test data
 join_dat <- dat[491:492,] # the month between training data and predictions (for plotting)
-ts_dat <- ts(train_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) # ts for model fitting
-test_ts <- ts(test_dat[, 2], start = c(2019, 1), end = c(2019, 12), frequency = 12) # ts for model testing
-ts_join <- ts(join_dat[, 2], start = c(2018, 12), end = c(2019, 1), frequency = 12) # between train and test
+# ts for model fitting
+ts_dat <- ts(train_dat[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) 
+# ts for model testing
+test_ts <- ts(test_dat[, 2], start = c(2019, 1), end = c(2019, 12), frequency = 12) 
+# between train and test
+ts_join <- ts(join_dat[, 2], start = c(2018, 12), end = c(2019, 1), frequency = 12) 
 plot.ts(ts_dat, ylab="People Employed (000's)")
 plot.ts(diff(ts_dat)) # We are not actually taking the difference yet!
 # This 2nd plot is just to help observe trends in variance. 
 ```
+
+\newpage
 The trend in mean is readily observable.
 Difficult to determine a trend in variance - there appears to be frequent changes, which are easier to see after incorporating lags of 1.
 Check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test, which has the following hypotheses:
@@ -82,6 +90,7 @@ plot.ts(cbind(ts_dat, log_ts_dat))
 leveneTest(log_ts_dat, Group)
 ```
 
+\newpage
 At a significance level of 5%, the p-value above of 0.7209 provides very weak evidence and we fail to reject the null hypothesis of equal variance among groups. Thus the heteroscedasticity has been reduced.
 
 Next, to reduce the trend in mean, apply differencing of 1 lag to our TS with stabilised variance:
@@ -97,11 +106,15 @@ axis(2, cex.axis = 1.6)
 box()
 #dev.off()
 ```
+
+\newpage
 To confirm constant mean and variance and a Gaussian distribution for the time series, a Shapiro-Wilk normality test is performed:
 ```{r}
 hist(f_ts_dat)
 shapiro.test(f_ts_dat)
 ```
+
+\newpage
 The small p-value indicates likely non-normality, but this test isn't really valid for TS. Instead, check statistically for stationarity using the Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test:
 ```{r}
 kpss.test(log_ts_dat)
@@ -115,11 +128,13 @@ acf2(f_ts_dat, main=expression(bold("Series " ~ Z[t])))
 par(mfrow=c(1,2))
 acf2(f_ts_dat, main=expression(bold("Series " ~ Z[t])))
 
-jpeg("acf_ts.jpg", width = 990, height = 300)
+#jpeg("acf_ts.jpg", width = 990, height = 300)
 par(cex.lab = 1.5, cex.axis = 1.5, cex.main = 1.6, mar = c(5, 5, 4, 2))
 acf(f_ts_dat,lag.max=48,  main=expression(bold("Series " ~ Z[t])))
-dev.off()
+#dev.off()
 ```
+
+\newpage
 Seasonal patterns in the ACF for TS_name (Figure [above]) show a slow decay in the dominant lags. To mitigate this, the time series was differenced in 12 lags giving [differenced model] for which the ACF and PACF are plotted in Figure [below].  
 ```{r}
 ts_dat_12 <- diff(f_ts_dat, 12)
@@ -127,14 +142,15 @@ kpss.test(ts_dat_12) #Big enough to call stationary
 
 #acf2(ts_dat_12)
 
-jpeg("seasonal_acf.jpg", width = 990, height = 350)
+#jpeg("seasonal_acf.jpg", width = 990, height = 350)
 par(cex.lab = 1.5, cex.main = 1.6, cex.axis = 1.5, mar = c(4.5, 4.5, 3, 1), mfrow=c(1,2))
 acf(ts_dat_12, lag.max = 48, main = "")
 pacf(ts_dat_12, lag.max = 48, main = "")
 mtext(expression(bold("Series " ~ U[t])), line = -3, outer = TRUE, cex = 1.6)
-dev.off()
+#dev.off()
 ```
 
+\newpage
 At the seasonal level, these indicate a cutoff at 1 in the ACF and tailing off in PACF, possibly indicating P=0 and Q=1. Lags 1,2,…,11 suggest several choices, so estimates of $0 \leq p \leq 1$ and $0 \leq q \leq 1$ are made and explored.  
 
 ```{r}
@@ -149,10 +165,12 @@ par(cex.lab = 1.6,  cex.main = 1.8, cex.axis = 1.6)
 sarima(log_ts_dat, p = 1, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
 #dev.off()
 ```
+
+\newpage
 For the first model, the Ljung-Box statistic is not satisfactory at lag 20, and unnesssecary coefficients were present in the model.
 By trimming coefficients and finding the minimum bias-corrected AIC, the model selected was $SARIMA(1,1,0)(0,1,1)_{12}$.
 
-We see a couple of outliers - pinpoint what these points are. The Ljung-Box statistic is passable at lag 20 or 30.  
+We see a couple of outliers in the standardised residuals and Q-Q plot. The ACF of the residuals is as expected for normal data. The Ljung-Box statistic has a large enough p-value at lag 20 large enough to not reject the null hypothesis of the model exhibiting lack of fit. 
 
 
 Fit the model from above with lowest AIC
@@ -162,7 +180,7 @@ fore <- predict(fit, n.ahead = 12)
 ```
 
 
-Display predictions:
+## Display predictions:  
 ```{r}
 #jpeg("predictions_plots.jpg", width = 1118, height = 300)
 par(cex.lab = 1.5, cex.axis = 1.5, cex.main = 1.6, mar = c(4.5, 4.5, 1, 1))
@@ -177,9 +195,8 @@ lines(exp(fore$pred-2*fore$se), lty="dashed", col = 4, lwd = 2)
 #dev.off()
 ```
 
-
-Assess the predictions. MAPE etc.
-test_ts is defined with the other data set breaks
+\newpage
+## Assess the predictions  
 ```{r}
 MAPE = 0
 for (i in 1:12){
@@ -190,12 +207,12 @@ MAPE
 Acc = 1-MAPE
 Acc
 ```
-MAPE can be converted to accuracy by 1-MAPE
-So we have a MAPE or 17.13% or an accuracy of prediction of 82.87% accuracy of forcecast over a 12 month period.
+MAPE can be converted to accuracy by 1-MAPE.
+So we have a MAPE or 0.17% or an accuracy of prediction, or 99.837% accuracy for the  12 months' forcecast.  
 
 
 
-Discuss future work. Mention any TS that might be interesting, we could include a scatterplot if we have a candidate that shows good results?
+## Considering the possibility of adding a secondary time series   
 
 Load in the additional data:
 ```{r}
@@ -204,32 +221,21 @@ head(dat2)
 ```
 
 Create a time series object from the data and plot.
-
 ```{r}
 ts_hours <- ts(dat2[, 2], start = c(1991, 1), end = c(2020, 8), frequency = 12)
 plot.ts(ts_hours)
-
-
 ```
 
-Cut the ts down to subset in appropriate time
-
+Cut the ts down to subset in appropriate time:
 ```{r}
 
 train_hours <- dat2[25:336,] # for training data
-train_hours
+head(train_hours)
 ts_h <- ts(train_hours[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) # ts compare to model
 plot.ts(ts_h)
-
-
 ```
 
-
 Plot a scatter plot comparing employed data and hours for those months. 
-
 ```{r}
-
 pairs(cbind(Workers=ts_dat, Hours=ts_h))
-# similar method to wk 6 lab
-
 ```
