@@ -216,7 +216,7 @@ Cut the ts down to subset in appropriate time
 
 ```{r}
 
-train_hours <- dat[25:336,] # for training data
+train_hours <- dat2[25:336,] # for training data
 train_hours
 ts_h <- ts(train_hours[, 2], start = c(1993, 1), end = c(2018, 12), frequency = 12) # ts compare to model
 plot.ts(ts_h)
